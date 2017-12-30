@@ -1,4 +1,4 @@
-package nl.melledijkstra.noisenotifier;
+package nl.melledijkstra.smartvolume;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;

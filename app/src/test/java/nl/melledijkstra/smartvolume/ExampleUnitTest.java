@@ -1,4 +1,4 @@
-package nl.melledijkstra.noisenotifier;
+package nl.melledijkstra.smartvolume;
 
 import org.junit.Test;
 

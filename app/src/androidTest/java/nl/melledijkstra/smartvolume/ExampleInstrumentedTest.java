@@ -1,4 +1,4 @@
-package nl.melledijkstra.noisenotifier;
+package nl.melledijkstra.smartvolume;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
 
-        assertEquals("nl.melledijkstra.noisenotifier", appContext.getPackageName());
+        assertEquals("nl.melledijkstra.smartvolume", appContext.getPackageName());
     }
 }
