@@ -8,4 +8,13 @@
     tools:context="nl.melledijkstra.smartvolume.MainActivity"
     tools:showIn="@layout/activity_main">
 
+    <TextView
+        android:id="@+id/txtDecibel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textSize="100sp"
+        android:text="@string/num"
+        />
+
 </android.support.constraint.ConstraintLayout>

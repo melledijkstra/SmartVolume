@@ -2,17 +2,26 @@ package nl.melledijkstra.smartvolume;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.Bundle;
+import android.os.Vibrator;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.InputType;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -23,6 +32,14 @@ public class MainActivity extends AppCompatActivity {
     private final String TAG = getClass().getSimpleName();
     final int REQUEST_ENABLE_BT = 32456;
     private BluetoothAdapter mBluetoothAdapter;
+
+    public TextView lblDecibel;
+
+    AlertDialog dialogTooLoud;
+
+    private int threshold = 100;
+
+    private static final String PREF_THRESHOLD = "nl.melledijkstra.smartvolume.THRESHOLD";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,14 +53,13 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Setting up bluetooth!", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-
                 MainActivity.this.mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-                if(mBluetoothAdapter != null) {
-                    if(mBluetoothAdapter.isEnabled()) {
+                if (mBluetoothAdapter != null) {
+                    if (mBluetoothAdapter.isEnabled()) {
                         selectBluetoothDevice();
                     } else {
+                        Snackbar.make(view, "Setting up bluetooth!", Snackbar.LENGTH_LONG)
+                                .setAction("Action", null).show();
                         Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                         startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
                     }
@@ -52,12 +68,29 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
+        lblDecibel = findViewById(R.id.txtDecibel);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        SharedPreferences prefs = getPreferences(Context.MODE_PRIVATE);
+        threshold = prefs.getInt(PREF_THRESHOLD, threshold);
+
+        // Dialog that shows when noise is too loud
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("Volume too high!!!")
+                .setMessage("The noise around the SmartVolume device is too loud! Try too keep it down to save your ears!")
+                .setIcon(android.R.drawable.ic_dialog_alert);
+        dialogTooLoud = builder.create();
     }
 
     /**
      * Make the user select a bluetooth device
      */
     private void selectBluetoothDevice() {
+        // Get list of paired devices
         Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
         final ArrayList<BluetoothDevice> btDevices = new ArrayList<>();
 
@@ -68,14 +101,15 @@ public class MainActivity extends AppCompatActivity {
                 btDevices.add(device);
                 deviceList.add(String.format("%s - %s", device.getName(), device.getAddress()));
             }
+            // Show them in a dialog to choose from
             final AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("Device List")
-               .setItems(deviceList.toArray(new CharSequence[deviceList.size()]), new DialogInterface.OnClickListener() {
-                   @Override
-                   public void onClick(DialogInterface dialogInterface, int i) {
-                       new BluetoothSocketThread(MainActivity.this, btDevices.get(i)).start();
-                   }
-               });
+                    .setItems(deviceList.toArray(new CharSequence[deviceList.size()]), new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            new BluetoothSocketThread(MainActivity.this, btDevices.get(i)).start();
+                        }
+                    });
             builder.create().show();
         } else {
             Toast.makeText(this, "No paired devices", Toast.LENGTH_SHORT).show();
@@ -84,7 +118,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if(requestCode == REQUEST_ENABLE_BT && resultCode == RESULT_OK) {
+        // If the requested bluetooth was correctly enabled, then ask user to select device
+        if (requestCode == REQUEST_ENABLE_BT && resultCode == RESULT_OK) {
             selectBluetoothDevice();
         } else if (requestCode == RESULT_CANCELED) {
             Toast.makeText(this, "Bluetooth is needed for this application", Toast.LENGTH_SHORT).show();
@@ -107,10 +142,54 @@ public class MainActivity extends AppCompatActivity {
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
-            Toast.makeText(this, "Settings", Toast.LENGTH_SHORT).show();
+            // Create an AlertDialog
+            AlertDialog.Builder alert = new AlertDialog.Builder(this);
+            alert.setTitle("Choose threshold");
+            final EditText input = new EditText(this);
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setRawInputType(Configuration.KEYBOARD_12KEY);
+            input.setText(Integer.toString(threshold));
+            // The alert has a single input for the threshold
+            alert.setView(input);
+            alert.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int whichButton) {
+                    // When user clicks yes, save the new threshold
+                    try {
+                        int newThreshold = Integer.parseInt(input.getText().toString());
+                        SharedPreferences prefs = getPreferences(Context.MODE_PRIVATE);
+                        prefs.edit().putInt(PREF_THRESHOLD, newThreshold).apply();
+                        threshold = newThreshold;
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(MainActivity.this, "Not a valid number", Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+            alert.setNegativeButton("Cancel", null);
+            alert.show();
             return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * Check if the measurement is above the threshold
+     * @param latestMeasure The latest measurement
+     */
+    public void checkDecibels(int latestMeasure) {
+        // if the measurement is over threshold and dialog isn't already showing to the user
+        if(latestMeasure > threshold && !dialogTooLoud.isShowing()) {
+            // These different types of alerts need to get attention from the user
+            dialogTooLoud.show();
+            // Generate a 1 second tone
+            ToneGenerator toneG = new ToneGenerator(AudioManager.STREAM_ALARM, 100);
+            toneG.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1000);
+            // Vibrate
+            Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            // Vibrate for 500 milliseconds
+            if (v != null) {
+                v.vibrate(500);
+            }
+        }
     }
 }

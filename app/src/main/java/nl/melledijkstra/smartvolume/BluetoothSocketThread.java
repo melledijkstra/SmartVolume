@@ -6,8 +6,11 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.util.Log;
 import android.widget.Toast;
+
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.PrintStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.UUID;
 
 import static android.content.ContentValues.TAG;
@@ -35,21 +38,11 @@ public class BluetoothSocketThread extends Thread {
     public void run() {
         // Always cancel discovery before connecting
         BluetoothAdapter.getDefaultAdapter().cancelDiscovery();
+        InputStream inputStream = null;
         try {
             socket = this.bDevice.createInsecureRfcommSocketToServiceRecord(MY_UUID);
             socket.connect();
-            PrintStream out = new PrintStream(socket.getOutputStream());
-            while (socket.isConnected()) {
-                try {
-                    out.print('0');
-                    out.flush();
-                    Thread.sleep(1000);
-                    out.print('1');
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
+            inputStream = socket.getInputStream();
         } catch (IOException e) {
             this.activity.runOnUiThread(new Runnable() {
                 @Override
@@ -64,6 +57,37 @@ public class BluetoothSocketThread extends Thread {
             }
             e.printStackTrace();
         }
+
+        if(inputStream != null) {
+            BufferedReader in = new BufferedReader(new InputStreamReader(inputStream));
+            while (socket.isConnected() && !interrupted()) {
+                try {
+                    final int latestMeasure = Integer.parseInt(in.readLine());
+                    Log.d(TAG, Integer.toString(latestMeasure));
+                    this.activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            ((MainActivity)activity).lblDecibel.setText(Integer.toString(latestMeasure));
+                            ((MainActivity)activity).checkDecibels(latestMeasure);
+                        }
+                    });
+                } catch (IOException | NumberFormatException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
         Log.d(TAG, "Thread stopped");
+        try {
+            socket.close();
+            this.activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(activity, "Connection closed", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
