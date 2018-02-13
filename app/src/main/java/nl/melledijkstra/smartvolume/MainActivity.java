@@ -25,21 +25,25 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
     private final String TAG = getClass().getSimpleName();
-    final int REQUEST_ENABLE_BT = 32456;
-    private BluetoothAdapter mBluetoothAdapter;
-
-    public TextView lblDecibel;
-
-    AlertDialog dialogTooLoud;
-
-    private int threshold = 100;
-
-    private static final String PREF_THRESHOLD = "nl.melledijkstra.smartvolume.THRESHOLD";
+	// A unique request code which identifies that a result was from a enable bluetooth request
+	final int REQUEST_ENABLE_BT = 32456;
+	// The bluetooth adapter class which can be used to communicate with the bluetooth module
+	// on this device
+	private BluetoothAdapter mBluetoothAdapter;
+	// The TextView which displays the current noise level
+	public TextView lblNoiseLevel;
+	// The dialog which pops up when the noise level is above the threshold
+	AlertDialog dialogTooLoud;
+	// The threshold value which is compared to the noise level
+	private int threshold = 100;
+	// The unique identifier for the threshold SharedPreference, so it is persistent even if the application is closed
+	private static final String PREF_THRESHOLD = "nl.melledijkstra.smartvolume.THRESHOLD";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,12 +52,12 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
         FloatingActionButton fab = findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
-
             @Override
             public void onClick(View view) {
-                MainActivity.this.mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
                 if (mBluetoothAdapter != null) {
                     if (mBluetoothAdapter.isEnabled()) {
                         selectBluetoothDevice();
@@ -69,7 +73,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        lblDecibel = findViewById(R.id.txtDecibel);
+        lblNoiseLevel = findViewById(R.id.txtNoiseLevel);
     }
 
     @Override
@@ -81,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
         // Dialog that shows when noise is too loud
         AlertDialog.Builder builder = new AlertDialog.Builder(this)
                 .setTitle("Volume too high!!!")
-                .setMessage("The noise around the SmartVolume device is too loud! Try too keep it down to save your ears!")
+                .setMessage("The noise around the SmartVolume device is too loud! Try to keep it down to save your ears!")
                 .setIcon(android.R.drawable.ic_dialog_alert);
         dialogTooLoud = builder.create();
     }
@@ -140,7 +144,6 @@ public class MainActivity extends AppCompatActivity {
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
 
-        //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
             // Create an AlertDialog
             AlertDialog.Builder alert = new AlertDialog.Builder(this);
@@ -148,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
             final EditText input = new EditText(this);
             input.setInputType(InputType.TYPE_CLASS_NUMBER);
             input.setRawInputType(Configuration.KEYBOARD_12KEY);
-            input.setText(Integer.toString(threshold));
+            input.setText(String.format(Locale.getDefault(), "%d", threshold));
             // The alert has a single input for the threshold
             alert.setView(input);
             alert.setPositiveButton("OK", new DialogInterface.OnClickListener() {
@@ -176,7 +179,7 @@ public class MainActivity extends AppCompatActivity {
      * Check if the measurement is above the threshold
      * @param latestMeasure The latest measurement
      */
-    public void checkDecibels(int latestMeasure) {
+    public void checkNoiseLevel(int latestMeasure) {
         // if the measurement is over threshold and dialog isn't already showing to the user
         if(latestMeasure > threshold && !dialogTooLoud.isShowing()) {
             // These different types of alerts need to get attention from the user
@@ -184,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
             // Generate a 1 second tone
             ToneGenerator toneG = new ToneGenerator(AudioManager.STREAM_ALARM, 100);
             toneG.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 1000);
-            // Vibrate
+
             Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
             // Vibrate for 500 milliseconds
             if (v != null) {
